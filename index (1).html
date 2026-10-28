@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d1b17">
+<title>Painel da Van</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f3efe6; --surface: #fffdf8; --ink: #1d1b17; --muted: #6b665c; --line: #e2dccf;
+  --sign: #e0a400; --sign-ink: #1a1400; --go: #17834a; --go-ink: #ffffff; --stop: #b8352a; --stop-soft: #fbe7e4;
+  --info: #1f5fa8; --info-soft: #e6eef8; --school: #6b3fa0;
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif; --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #12110d; --surface: #1d1b16; --ink: #f2eee4; --muted: #a39d90; --line: #36332b;
+  --sign: #f0b81c; --go: #2f9e60; --stop: #e0574a; --stop-soft: #3a1c19; --info: #6aa5ea; --info-soft: #18263a; --school: #9a6fd0;
+} }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.35; }
+[hidden] { display: none !important; }
+.app { max-width: 520px; margin: 0 auto; padding: 10px 12px 28px; display: grid; gap: 10px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--ink); color: var(--bg); border-radius: 14px; padding: 8px 12px; }
+.top b { font-family: var(--display); font-size: 1.2rem; text-transform: uppercase; letter-spacing: .03em; }
+.gps { font-size: .8rem; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.gps i { width: 10px; height: 10px; border-radius: 50%; background: #888; }
+.gps.ok i { background: #3fbf78; } .gps.mid i { background: #f0b81c; } .gps.bad i { background: #e0574a; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; }
+.label { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+h1, h2 { margin: 0; font-family: var(--display); text-transform: uppercase; letter-spacing: .02em; line-height: 1; }
+h1 { font-size: 2.3rem; } h2 { font-size: 1.5rem; }
+.muted { color: var(--muted); font-size: .9rem; margin: 0; }
+button, .btn { font: inherit; border: 0; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; text-align: center; }
+.big { min-height: 84px; font-family: var(--display); font-weight: 800; font-size: 1.9rem; text-transform: uppercase; letter-spacing: .03em; width: 100%; padding: 6px 10px; }
+.mid { min-height: 60px; font-family: var(--display); font-weight: 800; font-size: 1.35rem; text-transform: uppercase; width: 100%; }
+.go { background: var(--go); color: var(--go-ink); }
+.no { background: var(--stop-soft); color: var(--stop); border: 2px solid var(--stop); }
+.sign { background: var(--sign); color: var(--sign-ink); }
+.nav { background: var(--info); color: #fff; }
+.line { background: transparent; border: 2px solid var(--line); color: var(--ink); padding: 10px 12px; font-weight: 700; font-size: .95rem; }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; }
+.tipo button { min-height: 56px; background: transparent; border: 2px solid var(--line); color: var(--ink); font-weight: 700; flex-direction: column; gap: 2px; font-size: .9rem; }
+.tipo button[aria-pressed="true"] { border-color: var(--sign); background: color-mix(in srgb, var(--sign) 18%, transparent); }
+.tipo button span { font-size: 1.4rem; }
+input[type=text] { font: inherit; font-size: 1.1rem; padding: 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.pts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pts li { display: grid; grid-template-columns: 32px 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; }
+.pts .n { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; background: var(--sign); color: var(--sign-ink); }
+.pts .n.escola { background: var(--school); color: #fff; }
+.pts small { display: block; color: var(--muted); font-size: .8rem; }
+.pts .acts { display: flex; gap: 4px; }
+.pts .acts button { width: 38px; height: 38px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; font-size: 1rem; }
+.pts li.feito { opacity: .55; } .pts li.agora { border: 2px solid var(--sign); }
+.tag { font-size: .75rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.ok { background: color-mix(in srgb, var(--go) 18%, transparent); color: var(--go); }
+.tag.no { background: var(--stop-soft); color: var(--stop); }
+.now { border: 3px solid var(--sign); }
+.now.arrived { background: color-mix(in srgb, var(--sign) 14%, var(--surface)); }
+.now.escola { border-color: var(--school); }
+.now-head { display: flex; align-items: center; gap: 12px; }
+.stop-no { min-width: 56px; height: 56px; border-radius: 14px; background: var(--sign); color: var(--sign-ink); display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: 2rem; }
+.now.escola .stop-no { background: var(--school); color: #fff; }
+.dist { font-family: var(--display); font-weight: 800; font-size: 2.6rem; line-height: 1; }
+.dist small { font-size: 1rem; color: var(--muted); font-family: var(--body); font-weight: 400; text-transform: none; margin-left: 6px; }
+.obs { background: color-mix(in srgb, var(--sign) 22%, transparent); border-radius: 10px; padding: 8px 10px; font-weight: 700; }
+.banner { background: var(--sign); color: var(--sign-ink); border-radius: 12px; padding: 10px; text-align: center; font-weight: 800; font-size: 1.15rem; }
+.links { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.links button { background: none; color: var(--muted); text-decoration: underline; padding: 6px 0; font-size: .9rem; }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: .85rem; max-height: 220px; overflow: auto; }
+.log li { display: grid; grid-template-columns: 46px 1fr 18px; gap: 6px; }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+details summary { cursor: pointer; font-weight: 700; }
+.help ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: .92rem; }
+.toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 12px 16px; border-radius: 12px; font-weight: 700; max-width: calc(100% - 32px); z-index: 9; text-align: center; }
+.sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.sum div { background: var(--bg); border-radius: 12px; padding: 10px 4px; }
+.sum b { display: block; font-family: var(--display); font-size: 2rem; }
+.sum span { font-size: .8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <b id="topTitle">Painel da Van</b>
+    <span class="gps" id="gps"><i></i><span id="gpsTxt">GPS desligado</span></span>
+  </div>
+
+  <!-- ============ MONTAR ROTA ============ -->
+  <section id="vMontar" hidden>
+    <div class="card">
+      <div class="label">1 · Montar a rota</div>
+      <h2>Vá até cada ponto e salve</h2>
+      <p class="muted">Fique parado na frente da casa, do prédio ou da escola, espere o GPS ficar verde e toque em salvar. Salve na ordem da rota.</p>
+      <input type="text" id="inNome" placeholder="Nome do aluno ou da escola" autocomplete="off">
+      <div class="row tipo" role="group" aria-label="Tipo do ponto">
+        <button type="button" data-tipo="casa" aria-pressed="true"><span>🏠</span>Casa</button>
+        <button type="button" data-tipo="predio" aria-pressed="false"><span>🏢</span>Prédio</button>
+        <button type="button" data-tipo="escola" aria-pressed="false"><span>🏫</span>Escola</button>
+      </div>
+      <button class="big sign" id="btnSalvar">📍 Salvar ponto aqui</button>
+      <p class="muted" id="salvarInfo"></p>
+    </div>
+    <div class="card">
+      <div class="label">Pontos da rota (<span id="qtd">0</span>)</div>
+      <p class="muted" id="planilhaInfo"></p>
+      <ul class="pts" id="listaMontar"></ul>
+      <button class="big go" id="btnIniciar">▶ Iniciar rota</button>
+      <button class="line" id="btnRecarregar">↻ Atualizar da planilha</button>
+    </div>
+  </section>
+
+  <!-- ============ EM ROTA ============ -->
+  <section id="vRota" hidden>
+    <div class="card now" id="nowCard">
+      <div class="label" id="nowLabel">A caminho</div>
+      <div class="now-head"><div class="stop-no" id="nowNo">1</div><h1 id="nowNome">—</h1></div>
+      <div class="obs" id="nowObs" hidden></div>
+      <div class="dist" id="nowDist">— <small></small></div>
+
+      <div id="boxIndo">
+        <a class="btn mid nav" id="btnMaps" target="_blank" rel="noopener">🧭 Abrir rota no Google Maps</a>
+        <p class="muted" style="margin-top:6px">Abra uma vez: o Maps leva por todas as paradas. Só abra de novo se fechar o Maps.</p>
+      </div>
+
+      <div id="boxChegou" hidden style="display:grid;gap:10px">
+        <div class="banner" id="chegouTxt">📍 Chegou no ponto</div>
+        <div id="botoesCasa" style="display:grid;gap:10px">
+          <button class="big go" id="btnEmbarcou">✔ Embarcou</button>
+          <button class="big no" id="btnFaltou">✖ Não apareceu</button>
+        </div>
+        <button class="big go" id="btnDesceram" hidden>✔ Todos desceram</button>
+        <p class="muted" style="text-align:center">Se sair daqui sem tocar, conta como <b id="autoTxt">embarcou</b>.</p>
+      </div>
+
+      <div class="links">
+        <button id="btnCheguei">Já cheguei (GPS errado)</button>
+        <button id="btnPular">Pular este ponto</button>
+      </div>
+    </div>
+
+    <details class="card">
+      <summary>Sequência da rota</summary>
+      <ul class="pts" id="listaRota" style="margin-top:10px"></ul>
+    </details>
+  </section>
+
+  <!-- ============ FIM ============ -->
+  <section id="vFim" hidden>
+    <div class="card">
+      <div class="label">Rota finalizada</div>
+      <h1 id="fimHora">—</h1>
+      <div class="sum">
+        <div><b id="sEmb">0</b><span>embarcaram</span></div>
+        <div><b id="sFal">0</b><span>não apareceram</span></div>
+        <div><b id="sEsc">0</b><span>escolas</span></div>
+      </div>
+      <button class="mid line" id="btnDeNovo">↺ Fazer a rota de novo</button>
+      <button class="mid line" id="btnEditar">✎ Editar os pontos</button>
+    </div>
+  </section>
+
+  <details class="card help">
+    <summary>Como usar com o Google Maps (tela dividida)</summary>
+    <ol>
+      <li>Toque em <b>Abrir no Google Maps</b> e inicie a navegação.</li>
+      <li>Toque no botão de <b>apps recentes</b> (o quadradinho ou deslize de baixo para cima e segure).</li>
+      <li>Toque no ícone do <b>Google Maps</b> no topo do cartão e escolha <b>Abrir em tela dividida</b>.</li>
+      <li>Escolha o <b>Chrome</b> (este painel) para a outra metade.</li>
+      <li>Deixe a tela sempre ligada. Se o painel sair da tela, o GPS dele para.</li>
+    </ol>
+  </details>
+
+  <details class="card">
+    <summary>Mensagens enviadas</summary>
+    <ul class="log" id="log" style="margin-top:10px"></ul>
+    <p class="muted" id="fila"></p>
+  </details>
+
+  <details class="card">
+    <summary>Ajustes</summary>
+    <div style="display:grid;gap:8px;margin-top:10px">
+      <label class="muted">Distância para considerar "chegou": <b id="raioTxt">60</b> m</label>
+      <input type="range" id="raio" min="30" max="150" step="10" value="60">
+      <button class="line" id="btnTesteMsg">📲 Enviar mensagem de teste</button>
+      <button class="line" id="btnZerar">🗑 Limpar a rota deste celular</button>
+    </div>
+  </details>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// ================== CONFIGURAÇÃO ==================
+const BASE = 'https://n8n-fpx3.srv2012694.hstgr.cloud/webhook/';
+const WEBHOOK = BASE + 'rota-eventos';     // eventos da rota (viram WhatsApp)
+const PONTO_URL = BASE + 'rota-ponto';     // salvar / ordenar / excluir pontos na planilha
+const LISTA_URL = BASE + 'rota-pontos';    // ler a rota da planilha
+const CHAVE = 'van-58b21d5d71f4';          // tem que ser igual à do fluxo no n8n
+const ROTA_NOME = 'Teste · Van 2';
+const VEL_KMH = 25;                         // velocidade média para estimar o tempo
+const AVISO_MIN = { casa: 5, predio: 10 };  // aviso "chega em ~X min"
+// ==================================================
+
+const KEY = 'painel-van-gps-v2';
+const $ = id => document.getElementById(id);
+const hora = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const ICON = { casa: '🏠', predio: '🏢', escola: '🏫' };
+
+function novo() { return { pontos: [], fase: 'montar', idx: 0, sub: 'indo', st: {}, av: {}, log: [], fila: [], raio: 60, fim: '' }; }
+let S; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+if (!S || !Array.isArray(S.pontos)) S = novo();
+S.fila = S.fila || [];
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const toast = t => { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3500); };
+
+// ---------- envio para o n8n (com fila se a internet cair) ----------
+function enviar(evento, dados) {
+  const ev = { chave: CHAVE, rota: ROTA_NOME, evento, hora: hora(), ...dados };
+  S.fila.push({ url: WEBHOOK, body: ev, desc: descrever(ev), h: ev.hora }); save(); descarregar();
+}
+function enviarPonto(acao, dados, desc) {
+  const body = { chave: CHAVE, rota: ROTA_NOME, acao, ...dados };
+  S.fila.push({ url: PONTO_URL, body, desc: desc || 'Planilha atualizada', h: hora() }); save(); descarregar();
+}
+let enviando = false;
+async function descarregar() {
+  if (enviando || !S.fila.length) { renderFila(); return; }
+  enviando = true;
+  while (S.fila.length) {
+    const it = S.fila[0];
+    try {
+      const r = await fetch(it.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(it.body) });
+      if (!r.ok) throw new Error(r.status);
+      S.fila.shift(); S.log.unshift({ h: it.h, t: it.desc, ok: true });
+    } catch (e) { break; }
+    save();
+  }
+  enviando = false; renderFila(); renderLog();
+  if (!S.fila.length && planilhaTxt.startsWith('⏳')) carregar();
+}
+setInterval(descarregar, 10000);
+function descrever(ev) {
+  return { inicio: 'Rota iniciada', a_caminho: `${ev.aluno}: chega em ~${ev.minutos} min`, chegou: `${ev.aluno}: van chegou`, portaria: `${ev.aluno}: van na portaria`,
+    embarcou: `${ev.aluno} embarcou`, nao_apareceu: `${ev.aluno} não apareceu`, escola: `Chegou na ${ev.escola}`, fim: 'Rota finalizada', teste: 'Mensagem de teste' }[ev.evento] || ev.evento;
+}
+
+// ---------- GPS ----------
+let pos = null, dentro = 0, fora = 0;
+function dist(a, b) {
+  const R = 6371000, r = x => x * Math.PI / 180;
+  const dLa = r(b.lat - a.lat), dLn = r(b.lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLn / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const eta = m => Math.max(1, Math.round((m * 1.4 / 1000) / VEL_KMH * 60));
+const fmtDist = m => m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m) + ' m';
+function iniciarGPS() {
+  if (!('geolocation' in navigator)) { $('gpsTxt').textContent = 'Sem GPS'; return; }
+  navigator.geolocation.watchPosition(p => {
+    pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() };
+    const g = $('gps'); g.className = 'gps ' + (pos.acc <= 25 ? 'ok' : pos.acc <= 60 ? 'mid' : 'bad');
+    $('gpsTxt').textContent = 'GPS ±' + Math.round(pos.acc) + ' m';
+    if (S.fase === 'rota') checar();
+    if (S.fase === 'montar') renderSalvar();
+  }, err => {
+    $('gps').className = 'gps bad';
+    $('gpsTxt').textContent = err.code === 1 ? 'GPS bloqueado' : 'Sem sinal de GPS';
+    if (err.code === 1) toast('Libere a localização para este site nas configurações do Chrome.');
+  }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+}
+
+// ---------- PLANILHA ----------
+let planilhaTxt = '';
+async function carregar(avisar) {
+  if (S.fase !== 'montar') return;
+  if (S.fila.some(i => i.url === PONTO_URL)) { planilhaTxt = '⏳ Enviando pontos para a planilha…'; render(); return; }
+  try {
+    const r = await fetch(LISTA_URL + '?chave=' + encodeURIComponent(CHAVE));
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const lista = (j.pontos || []).map(p => ({ id: String(p.ID), nome: String(p.NOME || ''), tipo: ['casa', 'predio', 'escola'].includes(String(p.TIPO).toLowerCase()) ? String(p.TIPO).toLowerCase() : 'casa',
+      lat: Number(String(p.LAT).replace(',', '.')), lng: Number(String(p.LNG).replace(',', '.')), tel: String(p.TELEFONE || ''), obs: String(p.OBS || '') })).filter(p => p.nome && isFinite(p.lat) && isFinite(p.lng));
+    S.pontos = lista; save();
+    planilhaTxt = `📄 Rota da planilha: ${lista.length} ponto${lista.length === 1 ? '' : 's'} · ${hora()}`;
+    if (avisar) toast('Rota atualizada da planilha');
+  } catch (e) {
+    planilhaTxt = '⚠️ Sem conexão com a planilha. Usando a rota salva neste celular.';
+  }
+  render();
+}
+
+// ---------- MONTAR ----------
+let tipoSel = 'casa';
+document.querySelectorAll('.tipo button').forEach(b => b.addEventListener('click', () => {
+  tipoSel = b.dataset.tipo; document.querySelectorAll('.tipo button').forEach(x => x.setAttribute('aria-pressed', x === b));
+}));
+function renderSalvar() {
+  const info = $('salvarInfo');
+  if (!pos) { info.textContent = 'Esperando o GPS…'; return; }
+  info.textContent = pos.acc <= 25 ? 'GPS bom. Pode salvar.' : pos.acc <= 60 ? `Precisão de ${Math.round(pos.acc)} m. Dá para salvar, mas espere uns segundos se puder.` : `GPS fraco (±${Math.round(pos.acc)} m). Vá para um lugar aberto e espere.`;
+}
+$('btnSalvar').addEventListener('click', () => {
+  const nome = $('inNome').value.trim();
+  if (!nome) { toast('Escreva o nome primeiro'); $('inNome').focus(); return; }
+  if (!pos) { toast('Esperando o GPS…'); return; }
+  if (pos.acc > 100) { toast('GPS muito fraco. Espere ficar amarelo ou verde.'); return; }
+  const novoP = { id: String(Date.now()), nome, tipo: tipoSel, lat: +pos.lat.toFixed(6), lng: +pos.lng.toFixed(6), tel: '', obs: '' };
+  S.pontos.push(novoP);
+  enviarPonto('novo', { ponto: { ID: novoP.id, ORDEM: S.pontos.length, NOME: nome, TIPO: tipoSel, LAT: novoP.lat, LNG: novoP.lng } }, `Ponto salvo: ${nome}`);
+  $('inNome').value = ''; save(); render(); toast(`${ICON[tipoSel]} ${nome} salvo na planilha`);
+});
+function mover(i, d) {
+  const j = i + d; if (j < 0 || j >= S.pontos.length) return;
+  [S.pontos[i], S.pontos[j]] = [S.pontos[j], S.pontos[i]]; save(); render();
+  clearTimeout(mover.t); mover.t = setTimeout(() => enviarPonto('ordem', { lista: S.pontos.map((p, k) => ({ ID: p.id, ORDEM: k + 1 })) }, 'Ordem atualizada'), 1500);
+}
+function apagar(i) { const p = S.pontos[i]; if (confirmar(`Apagar ${p.nome}?`)) { S.pontos.splice(i, 1); enviarPonto('excluir', { ID: p.id }, `Ponto apagado: ${p.nome}`); save(); render(); } }
+function confirmar(t) { return window.confirm(t); }
+
+// ---------- ROTA ----------
+const ponto = () => S.pontos[S.idx];
+const aBordo = () => S.pontos.filter(p => p.tipo !== 'escola' && S.st[p.id] === 'embarcou');
+$('btnIniciar').addEventListener('click', () => {
+  if (S.pontos.length < 2) { toast('Salve pelo menos 2 pontos'); return; }
+  S.fase = 'rota'; S.idx = 0; S.sub = 'indo'; S.st = {}; S.av = {}; dentro = fora = 0;
+  enviar('inicio', { paradas: S.pontos.length });
+  save(); render(); if (pos) checar();
+  acordar();
+});
+function checar() {
+  const p = ponto(); if (!p || !pos) return;
+  const d = dist(pos, p); S.dAtual = d;
+  if (S.sub === 'indo') {
+    const av = S.av[p.id] = S.av[p.id] || {};
+    if (p.tipo !== 'escola') {
+      const m = eta(d), lim = AVISO_MIN[p.tipo];
+      if (!av.ini) { av.ini = true; av.iniMin = m; enviar('a_caminho', { id: p.id, aluno: p.nome, tipo: p.tipo, minutos: m }); }
+      else if (!av.cinco && av.iniMin > lim && m <= lim) { av.cinco = true; enviar('a_caminho', { id: p.id, aluno: p.nome, tipo: p.tipo, minutos: m }); }
+    }
+    dentro = d <= S.raio ? dentro + 1 : 0;
+    if (dentro >= 2) chegar();
+  } else {
+    fora = d > S.raio * 2.5 ? fora + 1 : 0;
+    if (fora >= 3) { p.tipo === 'escola' ? desceram() : embarcou(true); }
+  }
+  save(); renderRota();
+}
+function chegar() {
+  const p = ponto(); S.sub = 'chegou'; dentro = fora = 0;
+  try { navigator.vibrate && navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) {}
+  bip();
+  if (p.tipo === 'predio') enviar('portaria', { id: p.id, aluno: p.nome });
+  else if (p.tipo === 'casa') enviar('chegou', { id: p.id, aluno: p.nome });
+  save(); render();
+}
+function seguir() {
+  S.idx++; S.sub = 'indo'; dentro = fora = 0;
+  if (S.idx >= S.pontos.length) {
+    S.fase = 'fim'; S.fim = hora();
+    const v = Object.values(S.st);
+    enviar('fim', { embarcaram: v.filter(x => x === 'embarcou' || x === 'desceu').length, faltaram: v.filter(x => x === 'faltou').length });
+  }
+  save(); render(); if (S.fase === 'rota' && pos) checar();
+}
+function embarcou(auto) {
+  const p = ponto(); if (!p || p.tipo === 'escola') return;
+  S.st[p.id] = 'embarcou'; enviar('embarcou', { id: p.id, aluno: p.nome, auto: !!auto });
+  if (auto) toast(`${p.nome}: registrado como embarcou`);
+  seguir();
+}
+function faltou() {
+  const p = ponto(); if (!p) return;
+  S.st[p.id] = 'faltou'; enviar('nao_apareceu', { id: p.id, aluno: p.nome });
+  seguir();
+}
+function desceram() {
+  const p = ponto(); const quem = aBordo();
+  quem.forEach(a => S.st[a.id] = 'desceu'); S.st[p.id] = 'escola';
+  enviar('escola', { escola: p.nome, alunos: quem.map(a => a.nome), ids: quem.map(a => a.id) });
+  seguir();
+}
+// rota inteira restante no Maps (o link aceita até 9 paradas no meio)
+function mapsUrl() {
+  const resto = S.pontos.slice(S.idx, S.idx + 10);
+  const dest = resto[resto.length - 1], way = resto.slice(0, -1).map(p => `${p.lat},${p.lng}`).join('|');
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}${way ? '&waypoints=' + encodeURIComponent(way) : ''}&travelmode=driving`;
+}
+
+// som de chegada
+let ac = null;
+function bip() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    [0, .35, .7].forEach(t => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(.0001, ac.currentTime + t); g.gain.exponentialRampToValueAtTime(.4, ac.currentTime + t + .02); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + t + .25);
+      o.start(ac.currentTime + t); o.stop(ac.currentTime + t + .3); });
+  } catch (e) {}
+}
+// manter a tela ligada
+let lock = null;
+async function acordar() { try { if ('wakeLock' in navigator) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.fase === 'rota') acordar(); });
+
+// ---------- TELA ----------
+function render() {
+  $('vMontar').hidden = S.fase !== 'montar'; $('vRota').hidden = S.fase !== 'rota'; $('vFim').hidden = S.fase !== 'fim';
+  $('topTitle').textContent = S.fase === 'montar' ? 'Montar rota' : S.fase === 'rota' ? ROTA_NOME : 'Rota finalizada';
+  $('qtd').textContent = S.pontos.length; $('planilhaInfo').textContent = planilhaTxt;
+  $('listaMontar').innerHTML = S.pontos.length ? S.pontos.map((p, i) => `<li><span class="n ${p.tipo === 'escola' ? 'escola' : ''}">${p.tipo === 'escola' ? '🏫' : i + 1}</span><span><b>${p.nome}</b><small>${ICON[p.tipo]} ${p.tipo === 'predio' ? 'Prédio' : p.tipo === 'escola' ? 'Escola' : 'Casa'}</small></span><span class="acts"><button onclick="mover(${i},-1)" aria-label="Subir">↑</button><button onclick="mover(${i},1)" aria-label="Descer">↓</button><button onclick="apagar(${i})" aria-label="Apagar">✕</button></span></li>`).join('') : '<p class="muted">Nenhum ponto ainda.</p>';
+  $('raio').value = S.raio; $('raioTxt').textContent = S.raio;
+  if (S.fase === 'montar') renderSalvar();
+  if (S.fase === 'rota') renderRota();
+  if (S.fase === 'fim') {
+    const v = Object.values(S.st);
+    $('fimHora').textContent = 'Fim · ' + S.fim;
+    $('sEmb').textContent = v.filter(x => x === 'embarcou' || x === 'desceu').length;
+    $('sFal').textContent = v.filter(x => x === 'faltou').length;
+    $('sEsc').textContent = S.pontos.filter(p => p.tipo === 'escola').length;
+  }
+  renderLog(); renderFila();
+}
+function renderRota() {
+  const p = ponto(); if (!p) return;
+  const card = $('nowCard'), chegou = S.sub === 'chegou', esc = p.tipo === 'escola';
+  card.classList.toggle('arrived', chegou); card.classList.toggle('escola', esc);
+  const ordem = S.pontos.slice(0, S.idx + 1).filter(x => x.tipo !== 'escola').length;
+  $('nowNo').textContent = esc ? '🏫' : ordem;
+  $('nowNome').textContent = p.nome;
+  $('nowObs').hidden = !p.obs; $('nowObs').textContent = p.obs ? '⚠ ' + p.obs : '';
+  $('nowLabel').textContent = chegou ? (esc ? 'Na escola' : p.tipo === 'predio' ? 'Na portaria' : 'Na casa') : `A caminho · ${S.idx + 1} de ${S.pontos.length}`;
+  const d = S.dAtual;
+  $('nowDist').innerHTML = d == null ? 'GPS… <small></small>' : `${fmtDist(d)} <small>${esc ? '' : '~' + eta(d) + ' min'}</small>`;
+  $('btnMaps').href = mapsUrl();
+  $('boxIndo').hidden = chegou; $('boxChegou').hidden = !chegou;
+  $('botoesCasa').hidden = esc; $('btnDesceram').hidden = !esc;
+  $('chegouTxt').textContent = esc ? `🏫 Chegou · descem ${aBordo().length}` : '📍 Chegou no ponto';
+  $('autoTxt').textContent = esc ? 'todos desceram' : 'embarcou';
+  $('listaRota').innerHTML = S.pontos.map((x, i) => {
+    const st = S.st[x.id], tag = st === 'embarcou' ? '<span class="tag ok">Embarcou</span>' : st === 'desceu' ? '<span class="tag ok">Na escola</span>' : st === 'faltou' ? '<span class="tag no">Não apareceu</span>' : st === 'escola' ? '<span class="tag ok">Feito</span>' : st === 'pulado' ? '<span class="tag no">Pulado</span>' : '';
+    return `<li class="${i < S.idx ? 'feito' : i === S.idx ? 'agora' : ''}"><span class="n ${x.tipo === 'escola' ? 'escola' : ''}">${x.tipo === 'escola' ? '🏫' : i + 1}</span><span><b>${x.nome}</b><small>${ICON[x.tipo]}</small></span>${tag}</li>`;
+  }).join('');
+}
+function renderLog() { $('log').innerHTML = S.log.length ? S.log.slice(0, 40).map(l => `<li><time>${l.h}</time><span>${l.t}</span><span>✓</span></li>`).join('') : '<li class="muted">Nada enviado ainda.</li>'; }
+function renderFila() { $('fila').textContent = S.fila.length ? `⏳ ${S.fila.length} mensagem(ns) esperando internet…` : ''; }
+
+// ---------- BOTÕES ----------
+$('btnEmbarcou').addEventListener('click', () => embarcou(false));
+$('btnFaltou').addEventListener('click', faltou);
+$('btnDesceram').addEventListener('click', desceram);
+$('btnCheguei').addEventListener('click', () => { if (S.sub === 'indo') chegar(); });
+$('btnPular').addEventListener('click', () => { const p = ponto(); if (p && confirmar(`Pular ${p.nome}? Ninguém será avisado.`)) { S.st[p.id] = 'pulado'; seguir(); } });
+$('btnMaps').addEventListener('click', acordar);
+$('btnDeNovo').addEventListener('click', () => { S.fase = 'montar'; save(); render(); carregar(); $('btnIniciar').scrollIntoView({ behavior: 'smooth' }); });
+$('btnEditar').addEventListener('click', () => { S.fase = 'montar'; save(); render(); carregar(); });
+$('raio').addEventListener('input', e => { S.raio = +e.target.value; $('raioTxt').textContent = S.raio; save(); });
+$('btnTesteMsg').addEventListener('click', () => { enviar('teste', {}); toast('Mensagem de teste enviada'); });
+$('btnZerar').addEventListener('click', () => { if (confirmar('Limpar a rota deste celular? (a planilha não é apagada)')) { S = novo(); save(); render(); } });
+$('btnRecarregar').addEventListener('click', () => carregar(true));
+
+iniciarGPS(); render(); descarregar().then(() => carregar());
+if (S.fase === 'rota') acordar();
+</script>
+</body>
+</html>
