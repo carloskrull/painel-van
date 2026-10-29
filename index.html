@@ -110,6 +110,12 @@ details summary { cursor: pointer; font-weight: 700; }
       <button class="big go" id="btnIniciar">▶ Iniciar rota</button>
       <button class="line" id="btnRecarregar">↻ Atualizar da planilha</button>
     </div>
+    <div class="card">
+      <div class="label">Modo automático (GPS do Traccar)</div>
+      <p class="muted">Os avisos saem sozinhos pelo app Traccar Client. Depois de iniciar, pode deixar o Google Maps em tela cheia: não precisa do painel na tela. Para "não apareceu", toque em "Enviar SOS" no Traccar Client.</p>
+      <button class="big nav" id="btnAuto">🛰 Iniciar rota automática</button>
+      <button class="line" id="btnAutoParar">⏹ Parar rota automática</button>
+    </div>
   </section>
 
   <!-- ============ EM ROTA ============ -->
@@ -134,6 +140,7 @@ details summary { cursor: pointer; font-weight: 700; }
         <button class="big go" id="btnDesceram" hidden>✔ Todos desceram</button>
         <p class="muted" style="text-align:center">Se sair daqui sem tocar, conta como <b id="autoTxt">embarcou</b>.</p>
       </div>
+      <a class="btn line" id="btnMaps2" target="_blank" rel="noopener" hidden style="min-height:48px">🧭 Reabrir o Google Maps</a>
 
       <div class="links">
         <button id="btnCheguei">Já cheguei (GPS errado)</button>
@@ -433,6 +440,7 @@ function renderRota() {
   const d = S.dAtual;
   $('nowDist').innerHTML = d == null ? 'GPS… <small></small>' : `${fmtDist(d)} <small>${esc ? '' : '~' + eta(d) + ' min'}</small>`;
   $('btnMaps').href = mapsUrl();
+  $('btnMaps2').href = mapsUrl(); $('btnMaps2').hidden = !chegou;
   $('boxIndo').hidden = chegou; $('boxChegou').hidden = !chegou;
   $('botoesCasa').hidden = esc; $('btnDesceram').hidden = !esc;
   $('chegouTxt').textContent = esc ? `🏫 Chegou · descem ${aBordo().length}` : '📍 Chegou no ponto';
@@ -458,6 +466,22 @@ $('raio').addEventListener('input', e => { S.raio = +e.target.value; $('raioTxt'
 $('btnTesteMsg').addEventListener('click', () => { enviar('teste', {}); toast('Mensagem de teste enviada'); });
 $('btnZerar').addEventListener('click', () => { if (confirmar('Limpar a rota deste celular? (a planilha não é apagada)')) { S = novo(); save(); render(); } });
 $('btnRecarregar').addEventListener('click', () => carregar(true));
+async function auto(acao) {
+  try {
+    await fetch(BASE + 'traccar-' + acao + '?chave=' + encodeURIComponent(CHAVE), { mode: 'no-cors' });
+    toast(acao === 'iniciar' ? '🛰 Rota automática iniciada. Confira o WhatsApp.' : '⏹ Rota automática encerrada.');
+    S.log.unshift({ h: hora(), t: acao === 'iniciar' ? 'Rota automática iniciada' : 'Rota automática encerrada', ok: true }); save(); renderLog();
+    return true;
+  } catch (e) { toast('Sem conexão com o servidor. Tente de novo.'); return false; }
+}
+$('btnAuto').addEventListener('click', async () => {
+  if (S.pontos.length < 2) { toast('Salve pelo menos 2 pontos'); return; }
+  if (!confirmar('Iniciar a rota automática agora? (o Traccar Client precisa estar ligado)')) return;
+  S.idx = 0; const url = mapsUrl();
+  const w = window.open(url, '_blank', 'noopener');
+  if (await auto('iniciar') && !w) location.href = url;
+});
+$('btnAutoParar').addEventListener('click', () => { if (confirmar('Parar a rota automática?')) auto('parar'); });
 
 iniciarGPS(); render(); descarregar().then(() => carregar());
 if (S.fase === 'rota') acordar();
