@@ -385,7 +385,7 @@ function desceram() {
 function mapsUrl() {
   const resto = S.pontos.slice(S.idx, S.idx + 10);
   const dest = resto[resto.length - 1], way = resto.slice(0, -1).map(p => `${p.lat},${p.lng}`).join('|');
-  return `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}${way ? '&waypoints=' + encodeURIComponent(way) : ''}&travelmode=driving`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}${way ? '&waypoints=' + encodeURIComponent(way) : ''}&travelmode=driving&dir_action=navigate`;
 }
 
 // som de chegada
