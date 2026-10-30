@@ -286,11 +286,20 @@ async function carregar(avisar) {
   try {
     const r = await fetch(LISTA_URL + '?chave=' + encodeURIComponent(CHAVE));
     if (!r.ok) throw new Error(r.status);
-    const j = await r.json();
+    const txt = await r.text();
+    let j = {}; try { j = JSON.parse(txt); } catch (e) {}
+    if (typeof j === 'string') { try { j = JSON.parse(j); } catch (e) { j = {}; } }
+    if (Array.isArray(j)) j = j[0] || {};
+    if (j && j.json) j = j.json;
+    if (j && typeof j.data === 'string') { try { j = JSON.parse(j.data); } catch (e) {} }
     const lista = (j.pontos || []).map(p => ({ id: String(p.ID), nome: String(p.NOME || ''), tipo: ['casa', 'predio', 'escola'].includes(String(p.TIPO).toLowerCase()) ? String(p.TIPO).toLowerCase() : 'casa',
       lat: Number(String(p.LAT).replace(',', '.')), lng: Number(String(p.LNG).replace(',', '.')), tel: String(p.TELEFONE || ''), obs: String(p.OBS || '') })).filter(p => p.nome && isFinite(p.lat) && isFinite(p.lng));
-    S.pontos = lista; save();
-    planilhaTxt = `📄 Rota da planilha: ${lista.length} ponto${lista.length === 1 ? '' : 's'} · ${hora()}`;
+    if (!lista.length && S.pontos.length) {
+      planilhaTxt = '⚠️ A planilha respondeu sem pontos. Mantive a rota salva neste celular.';
+    } else {
+      S.pontos = lista; save();
+      planilhaTxt = `📄 Rota da planilha: ${lista.length} ponto${lista.length === 1 ? '' : 's'} · ${hora()}`;
+    }
     if (avisar) toast('Rota atualizada da planilha');
   } catch (e) {
     planilhaTxt = '⚠️ Sem conexão com a planilha. Usando a rota salva neste celular.';
@@ -475,11 +484,10 @@ async function auto(acao) {
   } catch (e) { toast('Sem conexão com o servidor. Tente de novo.'); return false; }
 }
 $('btnAuto').addEventListener('click', async () => {
-  if (S.pontos.length < 2) { toast('Salve pelo menos 2 pontos'); return; }
   if (!confirmar('Iniciar a rota automática agora? (o Traccar Client precisa estar ligado)')) return;
-  S.idx = 0; const url = mapsUrl();
-  const w = window.open(url, '_blank', 'noopener');
-  if (await auto('iniciar') && !w) location.href = url;
+  S.idx = 0; const url = S.pontos.length ? mapsUrl() : null;
+  const w = url ? window.open(url, '_blank', 'noopener') : null;
+  if (await auto('iniciar') && url && !w) location.href = url;
 });
 $('btnAutoParar').addEventListener('click', () => { if (confirmar('Parar a rota automática?')) auto('parar'); });
 
