@@ -110,6 +110,7 @@ const ROTAS_URL = 'https://router.project-osrm.org/route/v1/driving/'; // servi�
 const MAPA_ESTILO = 'https://tiles.openfreemap.org/styles/liberty';
 const RAIO = 60;                 // metros: só conta "chegou" aqui se a van estiver PARADA
 const RAIO_PERTO = 25;           // metros: conta "chegou" mesmo andando devagar
+const SAIDA = 100;               // metros: longe assim do ponto = saiu (embarcou sozinho)
 const AVISO_MIN = { casa: 5, predio: 10 };
 const VEL_SIM = 14;              // m/s no modo simulação (~50 km/h)
 // ==================================================
@@ -246,7 +247,7 @@ function minutosRestantes(pos) { // estimativa pela rota calculada
 }
 
 // ---------- posição (GPS real ou simulado) ----------
-let pos = null, rumoAtual = 0, dentro = 0, fora = 0, vizinho = 0;
+let pos = null, rumoAtual = 0, dentro = 0, fora = 0, vizinho = 0, passou = 0;
 function aoMover(p) {
   if (pos && dist(pos, p) > 3) rumoAtual = p.heading != null && !isNaN(p.heading) && p.speed > 1.5 ? p.heading : rumo(pos, p);
   pos = p;
@@ -283,14 +284,24 @@ function checarParada(p) {
       if (!av.ini) { av.ini = true; av.iniMin = m; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
       else if (!av.cinco && av.iniMin > lim && m <= lim) { av.cinco = true; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
     }
-    const parada = (p.speed || 0) < 1.5; // menos de ~5 km/h
-    dentro = (d <= RAIO_PERTO || (d <= RAIO && parada)) ? dentro + 1 : 0;
-    if (dentro >= 2) chegar();
+    const vel = p.speed || 0, parada = vel < 1.5, devagar = vel < 4; // 1,5 m/s ~ 5 km/h · 4 m/s ~ 15 km/h
+    dentro = ((d <= RAIO_PERTO && devagar) || (d <= RAIO && parada)) ? dentro + 1 : 0;
+    if (dentro >= 2) { chegar(); return; }
+    // passou na frente sem parar: a criança não teve como embarcar -> avisa o motorista, não marca nada
+    if ((p.acc || 0) < 50) av.minD = Math.min(av.minD == null ? Infinity : av.minD, d);
+    passou = av.minD <= RAIO && d > RAIO && d > av.minD + 30 ? passou + 1 : 0;
+    if (passou >= 2 && !av.passouAviso) {
+      av.passouAviso = true; passou = 0;
+      try { navigator.vibrate && navigator.vibrate([600, 200, 600, 200, 600]); } catch (e) {} bip();
+      falar(`Atenção! Você passou da parada ${alvo.tipo === 'escola' ? 'da escola' : 'de ' + alvo.nome}. Retorne, ou toque em não apareceu.`);
+      toast(`⚠ Passou da parada: ${alvo.nome}`, 6000);
+      if (rota && !rota.offline) calcularRota(p); // a rota já mostra o caminho de volta
+    }
   } else {
     const pn = S.pontos[S.idx + 1], dn = pn ? dist(p, pn) : Infinity;
     if (pn && dn <= RAIO && dn < d) { vizinho++; if (vizinho >= 2) { vizinho = 0; sair(true); return; } } else vizinho = 0;
-    fora = d > RAIO * 2.5 ? fora + 1 : 0;
-    if (fora >= 3) sair(true);
+    fora = d > SAIDA && (p.acc || 0) < 50 ? fora + 1 : 0;
+    if (fora >= 2) sair(true); // saiu do ponto sem tocar = embarcou
   }
   save();
 }
@@ -309,7 +320,7 @@ function sair(auto, faltou) {
     enviar('escola', { escola: a.nome, alunos: quem.map(x => x.nome), ids: quem.map(x => x.id) });
   } else if (faltou) { S.st[a.id] = 'faltou'; enviar('nao_apareceu', { id: a.id, aluno: a.nome }); }
   else { S.st[a.id] = 'embarcou'; enviar('embarcou', { id: a.id, aluno: a.nome, auto: !!auto }); }
-  S.idx++; S.sub = 'indo'; dentro = fora = vizinho = 0; rota = null; desenharRota();
+  S.idx++; S.sub = 'indo'; dentro = fora = vizinho = passou = 0; rota = null; desenharRota();
   if (S.idx >= S.pontos.length) { encerrar(true); return; }
   const prox = S.pontos[S.idx]; falar(`Próxima parada: ${prox.nome}`);
   save(); renderNav(); renderLista(); desenharPontos(); if (pos) calcularRota(pos);
@@ -384,7 +395,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- botões ----------
 $('bIniciar').onclick = () => {
   if (S.pontos.length < 2) { toast('A planilha precisa de pelo menos 2 paradas.'); return; }
-  S.ativa = true; S.idx = 0; S.sub = 'indo'; S.st = {}; S.av = {}; rota = null; dentro = fora = vizinho = 0; simPos = null; save();
+  S.ativa = true; S.idx = 0; S.sub = 'indo'; S.st = {}; S.av = {}; rota = null; dentro = fora = vizinho = passou = 0; simPos = null; save();
   $('start').hidden = true; $('sheet').hidden = false; $('turn').hidden = false;
   falar(`Rota iniciada. ${S.pontos.length} paradas. Primeira parada: ${S.pontos[0].nome}.`);
   enviar('inicio', { paradas: S.pontos.length });
