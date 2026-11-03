@@ -108,7 +108,8 @@ const CHAVE = 'van-58b21d5d71f4';
 const ROTA_NOME = 'Van 02';
 const ROTAS_URL = 'https://router.project-osrm.org/route/v1/driving/'; // serviço de rotas (teste)
 const MAPA_ESTILO = 'https://tiles.openfreemap.org/styles/liberty';
-const RAIO = 60;                 // metros para "chegou"
+const RAIO = 60;                 // metros: só conta "chegou" aqui se a van estiver PARADA
+const RAIO_PERTO = 25;           // metros: conta "chegou" mesmo andando devagar
 const AVISO_MIN = { casa: 5, predio: 10 };
 const VEL_SIM = 14;              // m/s no modo simulação (~50 km/h)
 // ==================================================
@@ -252,7 +253,7 @@ function aoMover(p) {
   $('gpsDot').textContent = p.sim ? '🧪 simulação' : `GPS ±${Math.round(p.acc || 0)} m`;
   if (vanMk && map) { vanMk.setLngLat([p.lng, p.lat]); if (!vanMk._map) vanMk.addTo(map); }
   if (!S.ativa) return;
-  if (map) map.easeTo({ center: [p.lng, p.lat], bearing: rumoAtual, zoom: 17, pitch: 50, duration: 900, padding: { top: 120, bottom: ($('sheet').offsetHeight || 200) + 20, left: 0, right: 0 } }); // van fica visível entre o banner e o cartão
+  if (map) map.easeTo({ center: [p.lng, p.lat], bearing: rumoAtual, zoom: 17, pitch: 50, duration: 1000, easing: t => t, padding: { top: 120, bottom: ($('sheet').offsetHeight || 200) + 20, left: 0, right: 0 } }); // van fica visível entre o banner e o cartão
   if (!rota || rota.alvo !== (S.pontos[S.idx] || {}).id) { calcularRota(p); return; }
   checarParada(p); if (S.ativa && S.sub === 'indo' && rota) checarCurvas(p);
   renderNav();
@@ -282,7 +283,8 @@ function checarParada(p) {
       if (!av.ini) { av.ini = true; av.iniMin = m; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
       else if (!av.cinco && av.iniMin > lim && m <= lim) { av.cinco = true; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
     }
-    dentro = d <= RAIO ? dentro + 1 : 0;
+    const parada = (p.speed || 0) < 1.5; // menos de ~5 km/h
+    dentro = (d <= RAIO_PERTO || (d <= RAIO && parada)) ? dentro + 1 : 0;
     if (dentro >= 2) chegar();
   } else {
     const pn = S.pontos[S.idx + 1], dn = pn ? dist(p, pn) : Infinity;
@@ -350,7 +352,7 @@ function simIniciar() {
   simT = setInterval(() => {
     if (!S.ativa || !simPos) return;
     if (S.sub === 'chegou') { // espera um pouco na parada e segue
-      simPos._espera = (simPos._espera || 0) + 1; if (simPos._espera < 8) { aoMover({ ...simPos, sim: true, acc: 5 }); return; }
+      simPos._espera = (simPos._espera || 0) + 1; if (simPos._espera < 8) { aoMover({ ...simPos, sim: true, acc: 5, speed: 0 }); return; }
       simPos._espera = 0; toast('Simulação: saindo da parada'); sair(true); return; // na rua de verdade, é o GPS que percebe a saída
     }
     if (rota && rota.coords.length > 1) {
@@ -361,7 +363,8 @@ function simIniciar() {
         else { const f = passoM / d; simPos = { lat: simPos.lat + (alvo.lat - simPos.lat) * f, lng: simPos.lng + (alvo.lng - simPos.lng) * f }; passoM = 0; }
       }
     }
-    aoMover({ ...simPos, sim: true, acc: 5, speed: VEL_SIM });
+    const fim = !rota || simI >= rota.coords.length - 1;
+    aoMover({ ...simPos, sim: true, acc: 5, speed: fim ? 0 : VEL_SIM });
   }, 1000);
 }
 
