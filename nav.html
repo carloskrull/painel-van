@@ -120,6 +120,12 @@ const RAIO_PERTO = 25;           // metros: conta "chegou" mesmo andando devagar
 const SAIDA = 100;               // metros: longe assim do ponto = saiu (embarcou sozinho)
 const AVISO_MIN = { casa: 5, predio: 10 };
 const VEL_SIM = 14;              // m/s no modo simulação (~50 km/h)
+// --- link para o pai acompanhar a van ---
+const ACOMP_URL = 'https://carloskrull.github.io/painel-van/acompanhe.html';
+const POSICAO_URL = BASE + 'rota-posicao';
+const EMPRESA = 'Transporte Escolar';  // nome que aparece para o pai
+const MOTORISTA = '';                  // ex.: 'João' (vazio = não mostra)
+const PLACA = '';                      // ex.: 'ABC-1D23' (vazio = não mostra)
 // ==================================================
 const KEY = 'van-nav-v1';
 const $ = id => document.getElementById(id);
@@ -323,6 +329,24 @@ function minutosRestantes(pos) { // estimativa pela rota calculada
   return Math.max(1, Math.round((rota.dur * Math.min(1.5, d / d0)) / 60));
 }
 
+// ---------- link do pai: posição da van para o servidor ----------
+function tokDe(id) { // código único do aluno nesta rota (ninguém adivinha o link de outra família)
+  S.tok = S.tok || {};
+  if (!S.tok[id]) { const c = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let t = ''; const r = new Uint32Array(10); crypto.getRandomValues(r); r.forEach(n => t += c[n % c.length]); S.tok[id] = t; save(); }
+  return S.tok[id];
+}
+let ultPosEnvio = 0;
+function enviarPosicao(agora) { // a cada 15 s durante a rota (e na hora, quando muda algo)
+  if (!agora && (!S.ativa || Date.now() - ultPosEnvio < 15000)) return;
+  ultPosEnvio = Date.now();
+  const alunos = S.pontos.map((x, i) => ({ id: x.id, nome: x.nome, tipo: x.tipo, lat: x.lat, lng: x.lng, ordem: i,
+    tok: x.tipo === 'escola' ? '' : tokDe(x.id), hora: (S.hr || {})[x.id] || '',
+    st: S.st[x.id] || (i === S.idx ? (S.sub === 'chegou' ? 'chegou' : 'proximo') : (i > S.idx ? 'aguardando' : '')) }));
+  const corpo = { chave: CHAVE, rota: ROTA_NOME, empresa: EMPRESA, motorista: MOTORISTA, placa: PLACA, ativa: !!S.ativa,
+    idx: S.idx, lat: pos ? pos.lat : null, lng: pos ? pos.lng : null, rumo: Math.round(rumoAtual || 0), min: pos && S.ativa ? minutosRestantes(pos) : null, alunos };
+  try { fetch(POSICAO_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), keepalive: true }).catch(() => {}); } catch (e) {}
+}
+
 // ---------- posição (GPS real ou simulado) ----------
 let temRumo = false; // só usa o sentido depois que a van andou
 let pos = null, rumoAtual = 0, dentro = 0, fora = 0, vizinho = 0, passou = 0;
@@ -335,6 +359,7 @@ function aoMover(p) {
   if (map && seguir) map.easeTo({ center: [p.lng, p.lat], bearing: rumoAtual, zoom: 17, pitch: 50, duration: 1000, easing: t => t, padding: { top: 120, bottom: ($('sheet').offsetHeight || 200) + 20, left: 0, right: 0 } }); // van fica visível entre o banner e o cartão
   if (!rota || rota.alvo !== (S.pontos[S.idx] || {}).id) { calcularRota(p); return; }
   checarParada(p); if (S.ativa && S.sub === 'indo' && rota) checarCurvas(p);
+  enviarPosicao(false);
   renderNav();
 }
 function checarCurvas(p) {
@@ -360,7 +385,7 @@ function checarParada(p) {
     const av = S.av[alvo.id] = S.av[alvo.id] || {};
     if (alvo.tipo !== 'escola') {
       const m = minutosRestantes(p) || 1, lim = AVISO_MIN[alvo.tipo] || 5;
-      if (!av.ini) { av.ini = true; av.iniMin = m; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
+      if (!av.ini) { av.ini = true; av.iniMin = m; enviarPosicao(true); enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m, link: ACOMP_URL + '?t=' + tokDe(alvo.id) }); }
       else if (!av.cinco && av.iniMin > lim && m <= lim) { av.cinco = true; enviar('a_caminho', { id: alvo.id, aluno: alvo.nome, tipo: alvo.tipo, minutos: m }); }
     }
     const vel = p.speed || 0, parada = vel < 1.5, devagar = vel < 4; // 1,5 m/s ~ 5 km/h · 4 m/s ~ 15 km/h
@@ -390,10 +415,11 @@ function chegar() {
   if (a.tipo === 'escola') falar(`Chegou na ${a.nome}. Desembarque dos alunos.`);
   else { falar(`Chegou. ${a.nome}.${a.tipo === 'predio' ? ' Prédio, aguarde na portaria.' : ''}${a.obs ? ' ' + a.obs + '.' : ''}`); enviar(a.tipo === 'predio' ? 'portaria' : 'chegou', { id: a.id, aluno: a.nome }); }
   save(); renderNav(); renderLista(); desenharPontos();
-  proxRota = null; setTimeout(precalcular, 1500); // adianta a rota até o próximo aluno
+  proxRota = null; setTimeout(precalcular, 1500); enviarPosicao(true); // adianta a rota até o próximo aluno
 }
 function sair(auto, faltou) {
   const a = S.pontos[S.idx]; if (!a) return;
+  S.hr = S.hr || {}; S.hr[a.id] = hora(); if (a.tipo === 'escola') S.pontos.forEach(x => { if (S.st[x.id] === 'embarcou') S.hr[x.id] = hora(); });
   if (a.tipo === 'escola') {
     const quem = S.pontos.filter(x => x.tipo !== 'escola' && S.st[x.id] === 'embarcou');
     quem.forEach(x => S.st[x.id] = 'desceu'); S.st[a.id] = 'escola';
@@ -402,10 +428,12 @@ function sair(auto, faltou) {
   else { S.st[a.id] = 'embarcou'; enviar('embarcou', { id: a.id, aluno: a.nome, auto: !!auto }); }
   S.idx++; S.sub = 'indo'; dentro = fora = vizinho = passou = 0; rota = null; rotaAlt = null; desenharRota();
   if (S.idx >= S.pontos.length) { encerrar(true); return; }
+  enviarPosicao(true);
   const prox = S.pontos[S.idx]; falar(`Próxima parada: ${prox.nome}`);
   save(); renderNav(); renderLista(); desenharPontos(); if (pos) calcularRota(pos);
 }
 function encerrar(fim) {
+  S.ativa = false; enviarPosicao(true);
   if (fim) { const v = Object.values(S.st); enviar('fim', { embarcaram: v.filter(x => x === 'embarcou' || x === 'desceu').length, faltaram: v.filter(x => x === 'faltou').length }); falar('Rota finalizada. Bom trabalho!'); }
   S.ativa = false; rota = null; rotaAlt = null; rotaToda = null; rotaTodaChave = ''; simParar(); desenharRota(); save();
   $('depois').hidden = true; $('mapBtns').hidden = true; voltarASeguir();
@@ -481,7 +509,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- botões ----------
 $('bIniciar').onclick = () => {
   if (S.pontos.length < 2) { toast('A planilha precisa de pelo menos 2 paradas.'); return; }
-  S.ativa = true; S.idx = 0; S.sub = 'indo'; S.st = {}; S.av = {}; rota = null; dentro = fora = vizinho = passou = 0; simPos = null; save();
+  S.ativa = true; S.idx = 0; S.sub = 'indo'; S.st = {}; S.av = {}; S.tok = {}; S.hr = {}; rota = null; dentro = fora = vizinho = passou = 0; simPos = null; save();
   $('start').hidden = true; $('sheet').hidden = false; $('turn').hidden = false;
   falar(`Rota iniciada. ${S.pontos.length} paradas. Primeira parada: ${S.pontos[0].nome}.`);
   enviar('inicio', { paradas: S.pontos.length });
