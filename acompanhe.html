@@ -96,15 +96,43 @@ function iniciarMapa(d) {
   map.on('dragstart', () => { ajustar = false; $('centro').hidden = false; });
   $('centro').onclick = () => { ajustar = true; $('centro').hidden = true; enquadrar(); };
 }
+let vanAtual = null, anim = null;
+function moverVan(v) { // desliza a van até a nova posição (sem pulos)
+  const de = vanAtual || v, ini = performance.now(), dur = 2500;
+  cancelAnimationFrame(anim);
+  const passo = agora => { const k = Math.min(1, (agora - ini) / dur);
+    vanAtual = { lat: de.lat + (v.lat - de.lat) * k, lng: de.lng + (v.lng - de.lng) * k, rumo: v.rumo };
+    vanMk.setLngLat([vanAtual.lng, vanAtual.lat]).setRotation(v.rumo || 0); aparar();
+    if (k < 1) anim = requestAnimationFrame(passo); };
+  anim = requestAnimationFrame(passo);
+}
+let proprio = null, proprioEm = 0, proprioDe = null;
+async function caminhoProprio(d) { // reserva: a própria página pede o caminho da van até a casa
+  if (proprioDe && Date.now() - proprioEm < 20000 && Math.abs(proprioDe.lat - d.van.lat) + Math.abs(proprioDe.lng - d.van.lng) < 0.0008) return;
+  proprioEm = Date.now(); proprioDe = { lat: d.van.lat, lng: d.van.lng };
+  try {
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${d.van.lng},${d.van.lat};${d.aluno.lng},${d.aluno.lat}?overview=full&geometries=geojson`);
+    const j = await r.json(); proprio = j.routes && j.routes[0] ? j.routes[0].geometry.coordinates : null;
+  } catch (e) { proprio = null; }
+  desenharLinha();
+}
+function linhaAtual() { if (!ultimo || ultimo.aluno.st !== 'proximo') return null; return ultimo.linha || proprio; }
+function aparar() { // apaga o trecho que a van já passou
+  const l = linhaAtual(); if (!l || l.length < 2 || !vanAtual || !map || !map.getSource || !map.getSource('rota')) return;
+  let melhor = 0, dm = Infinity; for (let i = 0; i < l.length; i++) { const dd = (l[i][0] - vanAtual.lng) ** 2 + (l[i][1] - vanAtual.lat) ** 2; if (dd < dm) { dm = dd; melhor = i; } }
+  const resto = [[vanAtual.lng, vanAtual.lat]].concat(l.slice(melhor + 1));
+  map.getSource('rota').setData(resto.length > 1 ? { type: 'Feature', geometry: { type: 'LineString', coordinates: resto } } : { type: 'FeatureCollection', features: [] });
+}
 function desenharLinha() { // caminho azul da van até a casa (igual ao app do motorista)
   if (!map || !map.getSource || !map.getSource('rota')) return;
-  const l = ultimo && ultimo.linha;
+  const l = linhaAtual();
+  if (l && l.length > 1 && vanAtual) { aparar(); return; }
   map.getSource('rota').setData(l && l.length > 1 ? { type: 'Feature', geometry: { type: 'LineString', coordinates: l } } : { type: 'FeatureCollection', features: [] });
 }
 function enquadrar() {
   if (!map || !ultimo) return; const d = ultimo;
   if (!d.van) { map.easeTo({ center: [d.aluno.lng, d.aluno.lat], zoom: 15 }); return; }
-  const pts = [[d.van.lng, d.van.lat], [d.aluno.lng, d.aluno.lat]].concat(d.linha || []);
+  const pts = [[d.van.lng, d.van.lat], [d.aluno.lng, d.aluno.lat]].concat(linhaAtual() || []);
   const lo = [Math.min(...pts.map(x => x[0])), Math.min(...pts.map(x => x[1]))], hi = [Math.max(...pts.map(x => x[0])), Math.max(...pts.map(x => x[1]))];
   map.fitBounds([lo, hi], { padding: 60, maxZoom: 16.5, duration: 800 });
 }
@@ -165,7 +193,8 @@ function mostrar(d) {
   if (atrasado) $('aviso').textContent = `Sinal da van atrasado (última posição há ${Math.round(d.idade / 60)} min). Pode ser falta de internet no caminho.`;
   if (mapaVisivel) {
     iniciarMapa(d);
-    if (vanMk && d.van) { vanMk.setLngLat([d.van.lng, d.van.lat]).setRotation(d.van.rumo || 0); if (!vanMk._map) vanMk.addTo(map); }
+    if (vanMk && d.van) { moverVan(d.van); if (!vanMk._map) vanMk.addTo(map); }
+    if (st === 'proximo' && !d.linha) caminhoProprio(d);
     desenharLinha();
     if (map && ajustar) { if (map.loaded()) enquadrar(); else map.once('load', enquadrar); }
     $('mapaBox').hidden = !map;
@@ -188,7 +217,7 @@ async function atualizar() {
     if (!d.ok) { erro('link'); timer = setTimeout(atualizar, 30000); return; }
     mostrar(d);
     const final = ['embarcou', 'desceu', 'escola', 'faltou'].includes(d.aluno.st) || !d.ativa;
-    timer = setTimeout(atualizar, final ? 60000 : 8000);
+    timer = setTimeout(atualizar, final ? 60000 : (d.aluno.st === 'proximo' || d.aluno.st === 'chegou' ? 3000 : 8000));
   } catch (e) { erro('rede'); timer = setTimeout(atualizar, 10000); }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') atualizar(); });
