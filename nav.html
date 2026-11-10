@@ -223,20 +223,37 @@ function instrucao(st) {
     default: return { t: `Siga ${lado}${rua}`, i: SETA[mod] || '⬆' };
   }
 }
+// busca no serviço de rotas, com limite de tempo (serviço lento não trava a tela)
+async function buscarJSON(url, ms) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  try { const r = await fetch(url, { signal: c.signal }); return await r.json(); } finally { clearTimeout(t); }
+}
+async function buscarRota(de, alvo, rumoVan) {
+  // sentido da van: a rota começa para a FRENTE (sem mandar fazer o retorno à toa)
+  const base = `${ROTAS_URL}${de.lng},${de.lat};${alvo.lng},${alvo.lat}?overview=full&geometries=geojson&steps=true&continue_straight=true`;
+  let j = null;
+  if (rumoVan != null) { try { j = await buscarJSON(`${base}&bearings=${Math.round(rumoVan)},60;`, 5000); if (j.code !== 'Ok') j = null; } catch (e) { j = null; } }
+  if (!j) j = await buscarJSON(base, 6000);
+  const rt = j.routes && j.routes[0]; if (!rt) throw 0;
+  const steps = rt.legs[0].steps.map(s => ({ ...s, loc: { lng: s.maneuver.location[0], lat: s.maneuver.location[1] } }));
+  return { coords: rt.geometry.coordinates.map(c => ({ lng: c[0], lat: c[1] })), steps, dur: rt.duration, distTotal: rt.distance, alvo: alvo.id };
+}
+let proxRota = null; // rota até o próximo aluno, calculada enquanto a van está parada no ponto
+async function precalcular() {
+  const pn = S.pontos[S.idx + 1]; if (!pn || !pos) return;
+  const de = { lat: pos.lat, lng: pos.lng };
+  try { const r = await buscarRota(de, pn, temRumo ? rumoAtual : null); r.de = de; proxRota = r; } catch (e) { proxRota = null; }
+}
+function usarRota(r) { rota = r; passo = 0; falado = {}; foraRota = 0; desenharRota(); simReset(); renderNav(); }
 async function calcularRota(de) {
   const alvo = S.pontos[S.idx]; if (!alvo || !de || calculando) return;
+  // já calculada enquanto estava parado no ponto? usa na hora
+  if (proxRota && proxRota.alvo === alvo.id && dist(de, proxRota.de) < 60) { const r = proxRota; proxRota = null; usarRota(r); return; }
   calculando = true; ultimoCalc = Date.now();
-  try {
-    const url = `${ROTAS_URL}${de.lng},${de.lat};${alvo.lng},${alvo.lat}?overview=full&geometries=geojson&steps=true`;
-    const r = await fetch(url); const j = await r.json();
-    const rt = j.routes && j.routes[0]; if (!rt) throw 0;
-    const steps = rt.legs[0].steps.map(s => ({ ...s, loc: { lng: s.maneuver.location[0], lat: s.maneuver.location[1] } }));
-    rota = { coords: rt.geometry.coordinates.map(c => ({ lng: c[0], lat: c[1] })), steps, dur: rt.duration, distTotal: rt.distance, alvo: alvo.id };
-    passo = 0; falado = {}; foraRota = 0; desenharRota(); simReset();
-  } catch (e) {
-    rota = { coords: [de, { lat: alvo.lat, lng: alvo.lng }], steps: [{ maneuver: { type: 'depart' }, name: '', loc: de }, { maneuver: { type: 'arrive' }, name: '', loc: { lat: alvo.lat, lng: alvo.lng } }], dur: dist(de, alvo) * 1.4 / 7, distTotal: dist(de, alvo) * 1.4, alvo: alvo.id, offline: true };
-    passo = 0; falado = {}; desenharRota(); simReset();
-    toast('Sem serviço de rotas: mostrando a direção em linha reta.');
+  try { usarRota(await buscarRota(de, alvo, temRumo ? rumoAtual : null)); }
+  catch (e) {
+    usarRota({ coords: [de, { lat: alvo.lat, lng: alvo.lng }], steps: [{ maneuver: { type: 'depart' }, name: '', loc: de }, { maneuver: { type: 'arrive' }, name: '', loc: { lat: alvo.lat, lng: alvo.lng } }], dur: dist(de, alvo) * 1.4 / 7, distTotal: dist(de, alvo) * 1.4, alvo: alvo.id, offline: true });
+    toast('Serviço de rotas lento: tentando de novo…');
   }
   calculando = false; renderNav();
 }
@@ -247,9 +264,10 @@ function minutosRestantes(pos) { // estimativa pela rota calculada
 }
 
 // ---------- posição (GPS real ou simulado) ----------
+let temRumo = false; // só usa o sentido depois que a van andou
 let pos = null, rumoAtual = 0, dentro = 0, fora = 0, vizinho = 0, passou = 0;
 function aoMover(p) {
-  if (pos && dist(pos, p) > 3) rumoAtual = p.heading != null && !isNaN(p.heading) && p.speed > 1.5 ? p.heading : rumo(pos, p);
+  if (pos && dist(pos, p) > 3 && (p.speed == null || p.speed > 1 || dist(pos, p) > 8)) { rumoAtual = p.heading != null && !isNaN(p.heading) && p.speed > 1.5 ? p.heading : rumo(pos, p); temRumo = true; }
   pos = p;
   $('gpsDot').textContent = p.sim ? '🧪 simulação' : `GPS ±${Math.round(p.acc || 0)} m`;
   if (vanMk && map) { vanMk.setLngLat([p.lng, p.lat]); if (!vanMk._map) vanMk.addTo(map); }
@@ -265,8 +283,9 @@ function checarCurvas(p) {
   while (passo < st.length - 1 && dist(p, st[passo + 1].loc) < 25) passo++;
   // fora da rota? recalcula
   let dMin = Infinity; for (let i = 1; i < rota.coords.length; i++) dMin = Math.min(dMin, distSeg(p, rota.coords[i - 1], rota.coords[i]));
-  foraRota = dMin > 45 && (p.acc || 0) < 40 ? foraRota + 1 : 0;
-  if (foraRota >= 3 && Date.now() - ultimoCalc > 12000 && !rota.offline) { falar('Recalculando a rota'); calcularRota(p); return; }
+  if (rota.offline) { if (Date.now() - ultimoCalc > 10000) calcularRota(p); } // sem rota de verdade: tenta de novo a cada 10 s
+  foraRota = dMin > 35 && (p.acc || 0) < 40 ? foraRota + 1 : 0;
+  if (foraRota >= 2 && Date.now() - ultimoCalc > 6000 && !rota.offline) { falar('Recalculando a rota'); calcularRota(p); return; }
   const prox = st[passo + 1]; if (!prox) return;
   const d = dist(p, prox.loc), ins = instrucao(prox), k = passo + 1;
   if (prox.maneuver.type !== 'arrive') {
@@ -311,6 +330,7 @@ function chegar() {
   if (a.tipo === 'escola') falar(`Chegou na ${a.nome}. Desembarque dos alunos.`);
   else { falar(`Chegou. ${a.nome}.${a.tipo === 'predio' ? ' Prédio, aguarde na portaria.' : ''}${a.obs ? ' ' + a.obs + '.' : ''}`); enviar(a.tipo === 'predio' ? 'portaria' : 'chegou', { id: a.id, aluno: a.nome }); }
   save(); renderNav(); renderLista(); desenharPontos();
+  proxRota = null; setTimeout(precalcular, 1500); // adianta a rota até o próximo aluno
 }
 function sair(auto, faltou) {
   const a = S.pontos[S.idx]; if (!a) return;
