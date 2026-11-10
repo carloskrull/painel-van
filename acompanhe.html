@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#123524">
+<title>Acompanhe a van</title>
+<meta property="og:title" content="🚐 Acompanhe a van">
+<meta property="og:description" content="Veja no mapa onde a van escolar está e quanto tempo falta para chegar.">
+<meta property="og:image" content="https://carloskrull.github.io/painel-van/icon-512.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root { --bg:#FBF7EC; --card:#FFFDF6; --ink:#123524; --soft:#4A5A4F; --line:#E7DDC2; --sign:#F2B90F; --ok:#1f9d5a; --warn:#d9473b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+header { background: var(--ink); color: #FBF7EC; padding: 14px 16px; display: flex; align-items: center; gap: 12px; padding-top: max(14px, env(safe-area-inset-top)); }
+header img { width: 40px; height: 40px; border-radius: 10px; }
+header b { font-size: 1.05rem; display: block; } header small { color: #CFE0D3; }
+main { padding: 14px 16px 24px; display: grid; gap: 12px; max-width: 560px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+#titulo { font-size: 1.9rem; font-weight: 900; line-height: 1.1; margin: 0; }
+#sub { color: var(--soft); margin: 6px 0 0; font-size: 1.02rem; }
+.big { background: var(--sign); border-color: var(--sign); }
+.big #sub { color: #3d3000; }
+.okc { background: #e5f5ec; border-color: #b8e2c9; }
+.steps { display: flex; justify-content: space-between; position: relative; margin-top: 4px; }
+.steps::before { content: ''; position: absolute; left: 12%; right: 12%; top: 13px; height: 3px; background: var(--line); }
+.step { position: relative; flex: 1; text-align: center; font-size: .78rem; color: var(--soft); }
+.dot { width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 3px solid var(--line); margin: 0 auto 6px; display: grid; place-items: center; font-size: .8rem; font-weight: 900; }
+.step.feito .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.step.agora .dot { background: var(--sign); border-color: var(--sign); color: var(--ink); }
+.step.feito, .step.agora { color: var(--ink); font-weight: 700; }
+#mapaBox { position: relative; }
+#mapa { height: 46vh; min-height: 280px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #e9e5dc; position: relative; }
+#centro { position: absolute; right: 10px; bottom: 10px; z-index: 2; background: #fff; border: 0; border-radius: 999px; padding: 10px 14px; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.info div { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.info small { color: var(--soft); display: block; font-size: .78rem; } .info b { font-size: 1rem; }
+#rodape { color: var(--soft); font-size: .82rem; text-align: center; }
+#aviso { background: #fde8e6; border: 1px solid #f3b7b1; color: #8a2a22; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
+[hidden] { display: none !important; }
+.van { width: 46px; height: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
+.casa { width: 34px; height: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+</style>
+</head>
+<body>
+<header><img src="icon-192.png" alt=""><div><b id="empresa">Acompanhe a van</b><small id="rotaNome">Carregando…</small></div></header>
+<main>
+  <section class="card" id="statusCard">
+    <p id="titulo">Carregando…</p>
+    <p id="sub"></p>
+  </section>
+  <section class="card" id="linhaCard" hidden>
+    <div class="steps">
+      <div class="step" id="s1"><div class="dot">1</div>Saiu</div>
+      <div class="step" id="s2"><div class="dot">2</div>A caminho</div>
+      <div class="step" id="s3"><div class="dot">3</div>Chegando</div>
+      <div class="step" id="s4"><div class="dot">4</div>Embarcou</div>
+    </div>
+  </section>
+  <div id="aviso" hidden></div>
+  <div id="mapaBox" hidden><div id="mapa"></div><button id="centro" hidden>Mostrar a van</button></div>
+  <section class="info" id="info" hidden>
+    <div id="iMot"><small>Motorista</small><b id="motorista">—</b></div>
+    <div id="iPlaca"><small>Placa da van</small><b id="placa">—</b></div>
+  </section>
+  <p id="rodape"></p>
+</main>
+<script>
+const SERVIDOR = 'https://n8n-fpx3.srv2012694.hstgr.cloud/webhook/rota-acompanhar';
+const MAPA_ESTILO = 'https://tiles.openfreemap.org/styles/liberty';
+const VAN_SVG = '<svg class="van" viewBox="0 0 44 44"><rect x="12" y="3" width="20" height="38" rx="6" fill="#2f64e0" stroke="#fff" stroke-width="2.5"/><rect x="14.5" y="8" width="15" height="7" rx="2" fill="#d6e6ff"/><rect x="12" y="21" width="20" height="5" fill="#f2b90f"/><rect x="15.5" y="33" width="13" height="4" rx="1.5" fill="#d6e6ff"/></svg>';
+const CASA_SVG = '<svg class="casa" viewBox="0 0 34 46"><path d="M17 1C8.2 1 1 8 1 16.8 1 28.6 17 45 17 45s16-16.4 16-28.2C33 8 25.8 1 17 1z" fill="#e53935" stroke="#fff" stroke-width="2"/><path d="M9 18l8-7 8 7v8h-5v-5h-6v5H9z" fill="#fff"/></svg>';
+const $ = id => document.getElementById(id);
+const token = new URLSearchParams(location.search).get('t') || '';
+let map = null, vanMk = null, casaMk = null, ajustar = true, ultimo = null;
+
+function iniciarMapa(d) {
+  if (map || !window.maplibregl) return;
+  $('mapaBox').hidden = false;
+  map = new maplibregl.Map({ container: 'mapa', style: MAPA_ESTILO, center: [d.aluno.lng, d.aluno.lat], zoom: 15, attributionControl: { compact: true } });
+  const ev = document.createElement('div'); ev.innerHTML = VAN_SVG;
+  vanMk = new maplibregl.Marker({ element: ev, rotationAlignment: 'map' });
+  const ec = document.createElement('div'); ec.innerHTML = CASA_SVG;
+  casaMk = new maplibregl.Marker({ element: ec, anchor: 'bottom' }).setLngLat([d.aluno.lng, d.aluno.lat]).addTo(map);
+  map.on('dragstart', () => { ajustar = false; $('centro').hidden = false; });
+  $('centro').onclick = () => { ajustar = true; $('centro').hidden = true; enquadrar(); };
+}
+function enquadrar() {
+  if (!map || !ultimo) return; const d = ultimo;
+  if (!d.van) { map.easeTo({ center: [d.aluno.lng, d.aluno.lat], zoom: 15 }); return; }
+  const lo = [Math.min(d.van.lng, d.aluno.lng), Math.min(d.van.lat, d.aluno.lat)], hi = [Math.max(d.van.lng, d.aluno.lng), Math.max(d.van.lat, d.aluno.lat)];
+  map.fitBounds([lo, hi], { padding: 60, maxZoom: 16.5, duration: 800 });
+}
+function passos(n) { ['s1', 's2', 's3', 's4'].forEach((id, i) => { $(id).className = 'step' + (i < n ? ' feito' : i === n ? ' agora' : ''); }); }
+const artigo = d => d.aluno.nome;
+
+function mostrar(d) {
+  ultimo = d;
+  $('empresa').textContent = d.empresa || 'Acompanhe a van';
+  $('rotaNome').textContent = d.rota ? 'Van: ' + d.rota : '';
+  $('motorista').textContent = d.motorista || '—'; $('iMot').hidden = !d.motorista;
+  $('placa').textContent = d.placa || '—'; $('iPlaca').hidden = !d.placa;
+  $('info').hidden = !d.motorista && !d.placa;
+  const nome = artigo(d), st = d.aluno.st, card = $('statusCard');
+  card.className = 'card'; $('linhaCard').hidden = false;
+  let mapaVisivel = true;
+  if (st === 'proximo' || st === 'aguardando') {
+    if (st === 'proximo') {
+      const m = d.min != null ? Math.max(1, Math.round(d.min - d.idade / 60)) : null;
+      card.className = 'card big';
+      $('titulo').textContent = m ? (m <= 1 ? 'A van está chegando!' : `Chega em ~${m} min`) : 'A van está a caminho';
+      $('sub').textContent = `Vocês são os próximos! Prepare ${nome}.`;
+      passos(m != null && m <= 2 ? 2 : 1);
+    } else {
+      $('titulo').textContent = 'A van está a caminho';
+      $('sub').textContent = d.faltam > 0 ? `Faltam ${d.faltam} parada${d.faltam > 1 ? 's' : ''} antes de ${nome}.` : `${nome} é o próximo.`;
+      passos(1);
+    }
+  } else if (st === 'chegou') {
+    card.className = 'card big';
+    $('titulo').textContent = d.aluno.tipo === 'predio' ? 'A van está na portaria!' : 'A van chegou!';
+    $('sub').textContent = `Está esperando ${nome} na frente de casa.`;
+    passos(3);
+  } else if (st === 'embarcou') {
+    card.className = 'card okc'; mapaVisivel = false;
+    $('titulo').textContent = `✅ ${nome} embarcou`;
+    $('sub').textContent = (d.aluno.hora ? `Às ${d.aluno.hora}. ` : '') + 'Você recebe uma mensagem quando chegar na escola.';
+    passos(4);
+  } else if (st === 'desceu' || st === 'escola') {
+    card.className = 'card okc'; mapaVisivel = false;
+    $('titulo').textContent = `🏫 ${nome} chegou na escola`;
+    $('sub').textContent = d.aluno.hora ? `Às ${d.aluno.hora}.` : '';
+    passos(4);
+  } else if (st === 'faltou') {
+    mapaVisivel = false; $('linhaCard').hidden = true;
+    $('titulo').textContent = `${nome} não apareceu`;
+    $('sub').textContent = (d.aluno.hora ? `Às ${d.aluno.hora}. ` : '') + 'A van seguiu a rota. Qualquer dúvida, fale com o transporte.';
+  } else {
+    mapaVisivel = false; $('linhaCard').hidden = true;
+    $('titulo').textContent = 'A rota terminou'; $('sub').textContent = 'Este acompanhamento não está mais ativo.';
+  }
+  if (!d.ativa && ['proximo', 'aguardando', 'chegou'].includes(st)) {
+    mapaVisivel = false; $('linhaCard').hidden = true; card.className = 'card';
+    $('titulo').textContent = 'A rota terminou'; $('sub').textContent = 'Este acompanhamento não está mais ativo.';
+  }
+  const atrasado = d.ativa && d.idade > 120 && mapaVisivel;
+  $('aviso').hidden = !atrasado;
+  if (atrasado) $('aviso').textContent = `Sinal da van atrasado (última posição há ${Math.round(d.idade / 60)} min). Pode ser falta de internet no caminho.`;
+  if (mapaVisivel) {
+    iniciarMapa(d);
+    if (vanMk && d.van) { vanMk.setLngLat([d.van.lng, d.van.lat]).setRotation(d.van.rumo || 0); if (!vanMk._map) vanMk.addTo(map); }
+    if (map && ajustar) { if (map.loaded()) enquadrar(); else map.once('load', enquadrar); }
+    $('mapaBox').hidden = !map;
+  } else $('mapaBox').hidden = true;
+  $('rodape').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + (mapaVisivel ? ' · atualiza sozinho' : '');
+}
+function erro(tipo) {
+  $('linhaCard').hidden = true; $('mapaBox').hidden = true; $('info').hidden = true;
+  $('titulo').textContent = tipo === 'rede' ? 'Sem conexão' : 'Link expirado';
+  $('sub').textContent = tipo === 'rede' ? 'Verifique a internet. Tentando de novo…' : 'Este link de acompanhamento não está mais ativo. Os links valem só no dia da rota.';
+  $('rotaNome').textContent = '';
+}
+let timer = null;
+async function atualizar() {
+  clearTimeout(timer);
+  try {
+    if (!token) { erro('link'); return; }
+    const r = await fetch(SERVIDOR + '?t=' + encodeURIComponent(token) + '&_=' + Date.now());
+    let d = await r.json(); if (Array.isArray(d)) d = d[0] || {};
+    if (!d.ok) { erro('link'); timer = setTimeout(atualizar, 30000); return; }
+    mostrar(d);
+    const final = ['embarcou', 'desceu', 'escola', 'faltou'].includes(d.aluno.st) || !d.ativa;
+    timer = setTimeout(atualizar, final ? 60000 : 8000);
+  } catch (e) { erro('rede'); timer = setTimeout(atualizar, 10000); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') atualizar(); });
+atualizar();
+</script>
+</body>
+</html>
