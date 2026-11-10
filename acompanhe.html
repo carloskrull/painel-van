@@ -194,31 +194,39 @@ function mostrar(d) {
   if (mapaVisivel) {
     iniciarMapa(d);
     if (vanMk && d.van) { moverVan(d.van); if (!vanMk._map) vanMk.addTo(map); }
-    if (st === 'proximo' && !d.linha) caminhoProprio(d);
+    if (st === 'proximo' && !d.linha && d.van) caminhoProprio(d);
     desenharLinha();
     if (map && ajustar) { if (map.loaded()) enquadrar(); else map.once('load', enquadrar); }
     $('mapaBox').hidden = !map;
   } else $('mapaBox').hidden = true;
   $('rodape').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + (mapaVisivel ? ' · atualiza sozinho' : '');
 }
-function erro(tipo) {
+function erro(tipo, codigo) {
   $('linhaCard').hidden = true; $('mapaBox').hidden = true; $('info').hidden = true;
-  $('titulo').textContent = tipo === 'rede' ? 'Sem conexão' : 'Link expirado';
-  $('sub').textContent = tipo === 'rede' ? 'Verifique a internet. Tentando de novo…' : 'Este link de acompanhamento não está mais ativo. Os links valem só no dia da rota.';
+  const t = { rede: ['Sem conexão', 'Verifique a internet. Tentando de novo…'],
+    servidor: ['Acompanhamento indisponível', 'Não consegui falar com o servidor da van' + (codigo ? ' (código ' + codigo + ')' : '') + '. Tentando de novo…'],
+    link: ['Link expirado', 'Este link de acompanhamento não está mais ativo. Os links valem só no dia da rota.'] }[tipo];
+  $('titulo').textContent = t[0]; $('sub').textContent = t[1];
   $('rotaNome').textContent = '';
 }
 let timer = null;
 async function atualizar() {
   clearTimeout(timer);
-  try {
-    if (!token) { erro('link'); return; }
+  if (!token) { erro('link'); return; }
+  let d;
+  try { // 1) falar com o servidor
     const r = await fetch(SERVIDOR + '?t=' + encodeURIComponent(token) + '&_=' + Date.now());
-    let d = await r.json(); if (Array.isArray(d)) d = d[0] || {};
-    if (!d.ok) { erro('link'); timer = setTimeout(atualizar, 30000); return; }
+    const txt = await r.text();
+    try { d = JSON.parse(txt); } catch (e) { d = null; }
+    if (Array.isArray(d)) d = d[0] || {};
+    if (!r.ok || !d) { erro('servidor', r.status); timer = setTimeout(atualizar, 15000); return; }
+  } catch (e) { erro(navigator.onLine === false ? 'rede' : 'servidor'); timer = setTimeout(atualizar, 10000); return; }
+  if (!d.ok) { erro('link'); timer = setTimeout(atualizar, 30000); return; }
+  try { // 2) mostrar na tela (um erro aqui não vira "sem conexão")
     mostrar(d);
     const final = ['embarcou', 'desceu', 'escola', 'faltou'].includes(d.aluno.st) || !d.ativa;
     timer = setTimeout(atualizar, final ? 60000 : (d.aluno.st === 'proximo' || d.aluno.st === 'chegou' ? 3000 : 8000));
-  } catch (e) { erro('rede'); timer = setTimeout(atualizar, 10000); }
+  } catch (e) { console.error(e); $('rodape').textContent = 'Aviso técnico: ' + (e && e.message); timer = setTimeout(atualizar, 5000); }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') atualizar(); });
 atualizar();
