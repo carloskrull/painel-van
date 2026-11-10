@@ -86,13 +86,26 @@ function iniciarMapa(d) {
   vanMk = new maplibregl.Marker({ element: ev, rotationAlignment: 'map' });
   const ec = document.createElement('div'); ec.innerHTML = CASA_SVG;
   casaMk = new maplibregl.Marker({ element: ec, anchor: 'bottom' }).setLngLat([d.aluno.lng, d.aluno.lat]).addTo(map);
+  map.on('load', () => {
+    const lay = { 'line-cap': 'round', 'line-join': 'round' };
+    map.addSource('rota', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ id: 'rota-borda', type: 'line', source: 'rota', paint: { 'line-color': '#1c2fb0', 'line-width': 11 }, layout: lay });
+    map.addLayer({ id: 'rota', type: 'line', source: 'rota', paint: { 'line-color': '#4664ff', 'line-width': 7 }, layout: lay });
+    desenharLinha();
+  });
   map.on('dragstart', () => { ajustar = false; $('centro').hidden = false; });
   $('centro').onclick = () => { ajustar = true; $('centro').hidden = true; enquadrar(); };
+}
+function desenharLinha() { // caminho azul da van até a casa (igual ao app do motorista)
+  if (!map || !map.getSource || !map.getSource('rota')) return;
+  const l = ultimo && ultimo.linha;
+  map.getSource('rota').setData(l && l.length > 1 ? { type: 'Feature', geometry: { type: 'LineString', coordinates: l } } : { type: 'FeatureCollection', features: [] });
 }
 function enquadrar() {
   if (!map || !ultimo) return; const d = ultimo;
   if (!d.van) { map.easeTo({ center: [d.aluno.lng, d.aluno.lat], zoom: 15 }); return; }
-  const lo = [Math.min(d.van.lng, d.aluno.lng), Math.min(d.van.lat, d.aluno.lat)], hi = [Math.max(d.van.lng, d.aluno.lng), Math.max(d.van.lat, d.aluno.lat)];
+  const pts = [[d.van.lng, d.van.lat], [d.aluno.lng, d.aluno.lat]].concat(d.linha || []);
+  const lo = [Math.min(...pts.map(x => x[0])), Math.min(...pts.map(x => x[1]))], hi = [Math.max(...pts.map(x => x[0])), Math.max(...pts.map(x => x[1]))];
   map.fitBounds([lo, hi], { padding: 60, maxZoom: 16.5, duration: 800 });
 }
 function passos(n) { ['s1', 's2', 's3', 's4'].forEach((id, i) => { $(id).className = 'step' + (i < n ? ' feito' : i === n ? ' agora' : ''); }); }
@@ -153,6 +166,7 @@ function mostrar(d) {
   if (mapaVisivel) {
     iniciarMapa(d);
     if (vanMk && d.van) { vanMk.setLngLat([d.van.lng, d.van.lat]).setRotation(d.van.rumo || 0); if (!vanMk._map) vanMk.addTo(map); }
+    desenharLinha();
     if (map && ajustar) { if (map.loaded()) enquadrar(); else map.once('load', enquadrar); }
     $('mapaBox').hidden = !map;
   } else $('mapaBox').hidden = true;
