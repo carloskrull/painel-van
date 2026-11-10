@@ -140,6 +140,12 @@ const toast = (t, ms) => { const el = $('toast'); el.textContent = t; el.hidden 
 const rad = x => x * Math.PI / 180;
 function dist(a, b) { const R = 6371000, dLa = rad(b.lat - a.lat), dLn = rad(b.lng - a.lng); const h = Math.sin(dLa / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
 function rumo(a, b) { const y = Math.sin(rad(b.lng - a.lng)) * Math.cos(rad(b.lat)); const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lng - a.lng)); return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; }
+function projSeg(p, a, b) { // distância de p ao segmento ab + posição (t de 0 a 1) do ponto mais perto
+  const k = 111320, cx = Math.cos(rad(p.lat));
+  const ax = (a.lng - p.lng) * k * cx, ay = (a.lat - p.lat) * k, bx = (b.lng - p.lng) * k * cx, by = (b.lat - p.lat) * k;
+  const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy; let t = L ? -(ax * dx + ay * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+  const x = ax + t * dx, y = ay + t * dy; return { d: Math.sqrt(x * x + y * y), t };
+}
 function distSeg(p, a, b) { // distância de p ao segmento ab (aprox. plana, em metros)
   const k = 111320, cx = Math.cos(rad(p.lat));
   const ax = (a.lng - p.lng) * k * cx, ay = (a.lat - p.lat) * k, bx = (b.lng - p.lng) * k * cx, by = (b.lat - p.lat) * k;
@@ -269,6 +275,7 @@ function verRotaToda() {
 }
 
 // ---------- rota (curvas) ----------
+let contraMao = 0;
 let rota = null, passo = 0, falado = {}, foraRota = 0, ultimoCalc = 0, calculando = false;
 const LADO = { left: 'à esquerda', right: 'à direita', 'slight left': 'levemente à esquerda', 'slight right': 'levemente à direita', 'sharp left': 'acentuadamente à esquerda', 'sharp right': 'acentuadamente à direita', straight: 'em frente', uturn: 'o retorno' };
 const SETA = { left: '⬅', right: '➡', 'slight left': '↖', 'slight right': '↗', 'sharp left': '⬅', 'sharp right': '➡', straight: '⬆', uturn: '↩' };
@@ -366,11 +373,27 @@ function checarCurvas(p) {
   const st = rota.steps;
   // avança o passo quando passa perto da manobra
   while (passo < st.length - 1 && dist(p, st[passo + 1].loc) < 25) passo++;
-  // fora da rota? recalcula
-  let dMin = Infinity; for (let i = 1; i < rota.coords.length; i++) dMin = Math.min(dMin, distSeg(p, rota.coords[i - 1], rota.coords[i]));
+  // onde a van está na linha da rota (procura primeiro perto de onde estava, para não pular para outro trecho)
+  const C = rota.coords, ini = Math.max(1, (rota.iProg || 1) - 3);
+  let dMin = Infinity, iMin = 1, tMin = 0;
+  const procura = (de, ate) => { for (let i = de; i < ate; i++) { const r = projSeg(p, C[i - 1], C[i]); if (r.d < dMin) { dMin = r.d; iMin = i; tMin = r.t; } } };
+  procura(ini, Math.min(C.length, ini + 80)); if (dMin > 30) procura(1, C.length);
+  rota.iProg = iMin;
+  // apaga o trecho que a van já passou (igual ao Google)
+  if (map && map.getSource && map.getSource('rota') && !rota.offline) {
+    const a = C[iMin - 1], b = C[iMin], ponto = { lat: a.lat + (b.lat - a.lat) * tMin, lng: a.lng + (b.lng - a.lng) * tMin };
+    map.getSource('rota').setData(linha([ponto].concat(C.slice(iMin))));
+  }
   if (rota.offline) { if (Date.now() - ultimoCalc > 10000) calcularRota(p); } // sem rota de verdade: tenta de novo a cada 10 s
-  foraRota = dMin > 35 && (p.acc || 0) < 40 ? foraRota + 1 : 0;
-  if (foraRota >= 2 && Date.now() - ultimoCalc > 6000 && !rota.offline) { falar('Recalculando a rota'); calcularRota(p); return; }
+  // saiu da rota? (longe da linha OU andando no sentido contrário) -> recalcula rápido
+  const lim = Math.max(25, Math.min(45, (p.acc || 10) * 1.5));
+  const seg = rumo(C[iMin - 1], C[iMin]), difR = Math.abs(((rumoAtual - seg) + 540) % 360 - 180);
+  foraRota = (dMin > lim && (p.acc || 0) < 40) ? foraRota + 1 : 0;
+  contraMao = (temRumo && (p.speed || 0) > 3 && difR > 110 && dMin < 60) ? contraMao + 1 : 0;
+  if ((foraRota >= 2 || contraMao >= 3) && Date.now() - ultimoCalc > 4000 && !rota.offline) {
+    $('turnIcon').textContent = '↻'; $('turnDist').textContent = '…'; $('turnText').textContent = 'Recalculando a rota…';
+    falar('Recalculando a rota'); contraMao = 0; calcularRota(p); return;
+  }
   const prox = st[passo + 1]; if (!prox) return;
   const d = dist(p, prox.loc), ins = instrucao(prox), k = passo + 1;
   if (prox.maneuver.type !== 'arrive') {
