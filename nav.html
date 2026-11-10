@@ -343,6 +343,13 @@ function tokDe(id) { // código único do aluno nesta rota (ninguém adivinha o 
   return S.tok[id];
 }
 let ultPosEnvio = 0;
+function linhaQueFalta() { // trecho da rota atual que a van ainda vai percorrer (para o mapa do pai), no máximo 120 pontos
+  if (!rota || rota.offline || S.sub !== 'indo' || !pos) return null;
+  const resto = [{ lat: pos.lat, lng: pos.lng }].concat(rota.coords.slice(rota.iProg || 1));
+  const passo = Math.max(1, Math.ceil(resto.length / 120));
+  const l = resto.filter((c, i) => i % passo === 0 || i === resto.length - 1);
+  return l.map(c => [Math.round(c.lng * 1e5) / 1e5, Math.round(c.lat * 1e5) / 1e5]);
+}
 function enviarPosicao(agora) { // a cada 15 s durante a rota (e na hora, quando muda algo)
   if (!agora && (!S.ativa || Date.now() - ultPosEnvio < 15000)) return;
   ultPosEnvio = Date.now();
@@ -350,7 +357,7 @@ function enviarPosicao(agora) { // a cada 15 s durante a rota (e na hora, quando
     tok: x.tipo === 'escola' ? '' : tokDe(x.id), hora: (S.hr || {})[x.id] || '',
     st: S.st[x.id] || (i === S.idx ? (S.sub === 'chegou' ? 'chegou' : 'proximo') : (i > S.idx ? 'aguardando' : '')) }));
   const corpo = { chave: CHAVE, rota: ROTA_NOME, empresa: EMPRESA, motorista: MOTORISTA, placa: PLACA, ativa: !!S.ativa,
-    idx: S.idx, lat: pos ? pos.lat : null, lng: pos ? pos.lng : null, rumo: Math.round(rumoAtual || 0), min: pos && S.ativa ? minutosRestantes(pos) : null, alunos };
+    idx: S.idx, lat: pos ? pos.lat : null, lng: pos ? pos.lng : null, rumo: Math.round(rumoAtual || 0), min: pos && S.ativa ? minutosRestantes(pos) : null, alunos, linha: linhaQueFalta() };
   try { fetch(POSICAO_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo), keepalive: true }).catch(() => {}); } catch (e) {}
 }
 
